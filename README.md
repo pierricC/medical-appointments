@@ -1,6 +1,8 @@
 # Medical appointements case
 
-Code to predict whether or not a person that made a medical appointment will show up or not
+Code to predict whether or not a person that made a medical appointment will show up or not.
+
+This problem is a classical binary classication problem but with a lot of unbalanced categorical variables.
 
 ## Src folder
 
