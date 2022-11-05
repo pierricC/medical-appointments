@@ -38,7 +38,7 @@ def train_classifier_lazy(
 def run_model(
     X: pd.DataFrame,
     y: pd.DataFrame,
-    params=Dict[Any, Any],
+    params: Dict[Any, Any],
     n_splits: int = 5,
     random_state: int = 12,
 ) -> Tuple[Dict[str, float], Dict[str, float]]:
@@ -57,7 +57,7 @@ def run_model(
         Number of splits for the cross-validation
     """
     train_kpis = {}
-    valid_kpis = {}
+    valid_kpis = {"valid_auc_mean": 0.0, "valid_mcc_mean": 0.0}
     i = 0
 
     folds = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
@@ -79,6 +79,12 @@ def run_model(
         valid_kpis[f"valid_auc_fold_{i}"] = roc_auc_score(y_valid, preds_valid)
         valid_kpis[f"valid_mcc_fold_{i}"] = matthews_corrcoef(y_valid, preds_valid)
 
+        valid_kpis["valid_auc_mean"] += roc_auc_score(y_valid, preds_valid)
+        valid_kpis["valid_mcc_mean"] += matthews_corrcoef(y_valid, preds_valid)
+
         i += 1
+
+    valid_kpis["valid_auc_mean"] /= n_splits
+    valid_kpis["valid_mcc_mean"] /= n_splits
 
     return train_kpis, valid_kpis

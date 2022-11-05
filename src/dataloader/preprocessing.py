@@ -1,5 +1,6 @@
 """Set of functions to preprocess the data before modelling."""
-from typing import List
+from collections import Counter
+from typing import List, Union
 
 import numpy as np
 import pandas as pd
@@ -8,21 +9,9 @@ from matplotlib import pyplot as plt
 from sklearn.preprocessing import LabelEncoder
 
 
-def get_date(serie: pd.Series, separator: str) -> pd.Series:
-    """Transform a serie into a datetime series."""
-    times = []
-
-    for i, date in enumerate(serie):
-        partition = date.partition(separator)
-        period = partition[0]
-        time = partition[2].replace("Z", "")
-
-        times.append(period + " " + time)
-
-    return pd.to_datetime(times)
-
-
-def num_to_cat(df: pd.DataFrame, max_unique_values: int = 10, plot: bool = True) -> pd.DataFrame:
+def num_to_cat(
+    df: pd.DataFrame, max_unique_values: int = 10, plot: bool = True
+) -> pd.DataFrame:
     """Convert numerical features with few values to categorical."""
     df_cp = df.copy()
     num_candidates = list(df_cp.dtypes[df_cp.dtypes != "object"].index.values)
@@ -43,8 +32,22 @@ def num_to_cat(df: pd.DataFrame, max_unique_values: int = 10, plot: bool = True)
     return df_cp
 
 
-def feature_engineering(df: pd.DataFrame):
+def get_date(serie: pd.Series, separator: str) -> pd.Series:
+    """Transform a serie into a datetime series."""
+    times = []
 
+    for i, date in enumerate(serie):
+        partition = date.partition(separator)
+        period = partition[0]
+        time = partition[2].replace("Z", "")
+
+        times.append(period + " " + time)
+
+    return pd.to_datetime(times)
+
+
+def time_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
+    """Get time features from 'ScheduledDay' and 'AppointmentDay'."""
     data = df.copy()
     times_sch = get_date(data["ScheduledDay"], "T")
     times_apt = get_date(data["AppointmentDay"], "T")
@@ -52,18 +55,52 @@ def feature_engineering(df: pd.DataFrame):
     data["AppointmentDay"] = times_apt
     data["ScheduledDay"] = times_sch
 
-    data["month_sch"] = times_sch.month
-    data["day_sch"] = times_sch.day
-    data["hour_sch"] = times_sch.hour
-    data["minute_sch"] = times_sch.minute
-    data["second_sch"] = times_sch.second
+    data["Month_sch"] = times_sch.month
+    data["Day_sch"] = times_sch.day
+    data["Hour_sch"] = times_sch.hour
+    data["Minute_sch"] = times_sch.minute
+    data["Second_sch"] = times_sch.second
 
-    data["month_apt"] = times_apt.month
-    data["day_apt"] = times_apt.day
+    data["Month_apt"] = times_apt.month
+    data["Day_apt"] = times_apt.day
 
     data = data.drop(["ScheduledDay", "AppointmentDay"], axis=1)
 
     return data
+
+
+def get_total_occurrence(
+    df: pd.DataFrame, feature: str = "PatientID", max_frequency: int = 3
+) -> pd.DataFrame:
+    """
+    Get the frequency of each value in the feature column.
+
+    Create a new categorical feature out of it with a number max of categories.
+    If a value appears more than max frequency, then its frequency is equal to max_frequency.
+    """
+    occurrence_dict = dict(Counter(df[feature])).items()  # type: ignore
+    column_name = f"Nb_occurrence_{feature}"
+    df_occurrence = pd.DataFrame(data=occurrence_dict, columns=[feature, column_name])
+    df_occurrence.loc[
+        df_occurrence[column_name].value_counts()[df_occurrence[column_name]].index
+        >= max_frequency,
+        column_name,
+    ] = max_frequency
+
+    df = pd.merge(df, df_occurrence, on=feature, how="outer")
+
+    # we drop the feature since we don't need it anymore
+    df = df.drop(feature, axis=1)
+    return df
+
+
+def feature_to_bin(
+    df: pd.DataFrame, feature_name: str, bins: Union[int, List[int]]
+) -> pd.DataFrame:
+    """Create a categorical feature from a numerical by putting values into bins."""
+    df[f"{feature_name}_bins"] = pd.cut(df[feature_name], bins=bins, labels=False)
+
+    return df
 
 
 def labelencode(df: pd.DataFrame, col_to_encode: List[str]) -> pd.DataFrame:
@@ -73,16 +110,7 @@ def labelencode(df: pd.DataFrame, col_to_encode: List[str]) -> pd.DataFrame:
         # initialize labelencoder for each categorical column
         encoder = LabelEncoder()
 
-        # fit label encoder on all data
-        encoder.fit(df_cp[col])
-
-        # transform all the data
-        df_cp.loc[:, col] = encoder.transform(df_cp[col])
+        # fit & transform all the data
+        df_cp.loc[:, col] = encoder.fit_transform(df_cp[col])
 
     return df_cp
-
-
-# def categorical_feat_engineering(
-#     df: pd.DataFrame, cat_cols: List[str], combination_size: int
-# ) -> pd.DataFrame:
-#     """Create all combinations of the categorical columns provided wi."""
